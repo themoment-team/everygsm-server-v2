@@ -1,6 +1,7 @@
 package team.themoment.everygsm.server.v2.domain.project.service;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -73,6 +74,8 @@ public class HandleDatagsmProjectEventService {
                 newState.startYear(),
                 owner);
         project.replaceParticipants(participants);
+        project.replaceRepoUrls(toSet(newState.repositories()));
+        project.replaceStackNames(toSet(newState.techStacks()));
         project.updateDatagsmState(parseStatus(newState.status()), newState.endYear());
         log.info("datagsm project.updated 이벤트를 반영했습니다. externalProjectId={}", newState.id());
     }
@@ -94,7 +97,13 @@ public class HandleDatagsmProjectEventService {
                 && Objects.equals(project.getStartYear(), newState.startYear())
                 && Objects.equals(currentParticipantEmails, newParticipantEmails)
                 && Objects.equals(project.getDatagsmStatus(), parseStatus(newState.status()))
-                && Objects.equals(project.getDatagsmEndYear(), newState.endYear());
+                && Objects.equals(project.getDatagsmEndYear(), newState.endYear())
+                && Objects.equals(project.getRepoUrls(), toSet(newState.repositories()))
+                && Objects.equals(project.getStackNames(), toSet(newState.techStacks()));
+    }
+
+    private Set<String> toSet(List<String> values) {
+        return values == null ? Set.of() : Set.copyOf(values);
     }
 
     private DatagsmProjectStatus parseStatus(String status) {

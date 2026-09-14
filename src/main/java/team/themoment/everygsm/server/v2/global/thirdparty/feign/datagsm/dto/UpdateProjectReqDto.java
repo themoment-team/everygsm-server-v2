@@ -17,4 +17,6 @@ public class UpdateProjectReqDto {
     private final List<Long> participantIds;
     private final ProjectStatus status;
     private final Integer endYear;
+    private final List<String> repositories;
+    private final List<String> techStacks;
 }

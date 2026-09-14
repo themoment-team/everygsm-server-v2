@@ -201,4 +201,18 @@ public class ProjectJpaEntity {
         this.datagsmStatus = datagsmStatus;
         this.datagsmEndYear = datagsmEndYear;
     }
+
+    public void replaceStackNames(Set<String> newStackNames) {
+        this.stackNames.clear();
+        if (newStackNames != null) {
+            this.stackNames.addAll(newStackNames);
+        }
+    }
+
+    public void replaceRepoUrls(Set<String> newRepoUrls) {
+        this.repoUrls.clear();
+        if (newRepoUrls != null) {
+            this.repoUrls.addAll(newRepoUrls);
+        }
+    }
 }

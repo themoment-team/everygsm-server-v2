@@ -14,4 +14,6 @@ public class ProjectReqDto {
     private final int startYear;
     private final Long clubId;
     private final List<Long> participantIds;
+    private final List<String> repositories;
+    private final List<String> techStacks;
 }

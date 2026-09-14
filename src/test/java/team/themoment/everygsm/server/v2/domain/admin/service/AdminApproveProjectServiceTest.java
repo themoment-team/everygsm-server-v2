@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -241,6 +242,37 @@ class AdminApproveProjectServiceTest {
                 verify(datagsmApiClient).updateProject(eq(EXTERNAL_ID), argThat(preservesEndedStatus));
                 assertEquals(DatagsmProjectStatus.ENDED, project.getDatagsmStatus());
                 assertEquals(2025, project.getDatagsmEndYear());
+            }
+
+            @Test
+            @DisplayName("EveryGSM의 리포지토리 링크와 기술스택을 수정 요청에 함께 실어 보낸다")
+            void it_sends_repositories_and_tech_stacks() {
+                project = ProjectJpaEntity.builder().title(TITLE).description("설명").logo("logo.png")
+                        .prodUrl("https://a.b").startYear(START_YEAR).status(Status.PENDING)
+                        .repoUrls(Set.of("https://github.com/team/repo")).stackNames(Set.of("Kotlin", "Spring Boot"))
+                        .build();
+                given(projectRepository.findProjectWithCollectionsById(PROJECT_ID)).willReturn(Optional.of(project));
+                project.assignExternalProjectId(EXTERNAL_ID);
+
+                Project currentDatagsmProject = new Project();
+                currentDatagsmProject.setId(EXTERNAL_ID);
+                currentDatagsmProject.setStatus(ProjectStatus.ACTIVE);
+                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
+                given(projectApi.getProject(EXTERNAL_ID)).willReturn(currentDatagsmProject);
+
+                DatagsmApiResponse<DatagsmProjectResDto> response = mock(DatagsmApiResponse.class);
+                DatagsmProjectResDto data = mock(DatagsmProjectResDto.class);
+                given(data.getId()).willReturn(EXTERNAL_ID);
+                given(response.getData()).willReturn(data);
+                ArgumentMatcher<UpdateProjectReqDto> carriesRepoAndTechStack = reqDto -> Set
+                        .copyOf(reqDto.getRepositories()).equals(Set.of("https://github.com/team/repo"))
+                        && Set.copyOf(reqDto.getTechStacks()).equals(Set.of("Kotlin", "Spring Boot"));
+                given(datagsmApiClient.updateProject(eq(EXTERNAL_ID), argThat(carriesRepoAndTechStack)))
+                        .willReturn(response);
+
+                adminApproveProjectService.execute(PROJECT_ID);
+
+                verify(datagsmApiClient).updateProject(eq(EXTERNAL_ID), argThat(carriesRepoAndTechStack));
             }
         }
     }

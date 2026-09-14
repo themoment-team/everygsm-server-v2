@@ -128,6 +128,8 @@ class HandleDatagsmProjectEventServiceTest {
                         null,
                         "ACTIVE",
                         null,
+                        List.of(),
+                        List.of(),
                         List.of());
                 given(projectRepository.findByExternalProjectId(EXTERNAL_ID)).willReturn(Optional.empty());
 
@@ -155,6 +157,8 @@ class HandleDatagsmProjectEventServiceTest {
                         null,
                         "ACTIVE",
                         sameClub,
+                        List.of(),
+                        List.of(),
                         List.of());
 
                 handleDatagsmProjectEventService.execute(eventOf(sameState));
@@ -182,13 +186,17 @@ class HandleDatagsmProjectEventServiceTest {
                         null,
                         "ACTIVE",
                         changedClub,
-                        List.of());
+                        List.of(),
+                        List.of("https://github.com/team/repo"),
+                        List.of("Kotlin", "Spring Boot"));
 
                 handleDatagsmProjectEventService.execute(eventOf(changedState));
 
                 assertEquals("새 제목", project.getTitle());
                 assertEquals("새 설명", project.getDescription());
                 assertEquals("동아리B", project.getAffiliation());
+                assertEquals(Set.of("https://github.com/team/repo"), project.getRepoUrls());
+                assertEquals(Set.of("Kotlin", "Spring Boot"), project.getStackNames());
             }
         }
 
@@ -217,7 +225,9 @@ class HandleDatagsmProjectEventServiceTest {
                         null,
                         "ACTIVE",
                         sameClub,
-                        List.of(participant));
+                        List.of(participant),
+                        List.of(),
+                        List.of());
 
                 handleDatagsmProjectEventService.execute(eventOf(changedParticipants));
 
@@ -245,6 +255,8 @@ class HandleDatagsmProjectEventServiceTest {
                         2026,
                         "ENDED",
                         sameClub,
+                        List.of(),
+                        List.of(),
                         List.of());
 
                 handleDatagsmProjectEventService.execute(eventOf(endedState));
@@ -292,7 +304,9 @@ class HandleDatagsmProjectEventServiceTest {
                         null,
                         "ACTIVE",
                         sameClub,
-                        List.of(first, leaderParticipant));
+                        List.of(first, leaderParticipant),
+                        List.of(),
+                        List.of());
 
                 handleDatagsmProjectEventService.execute(eventOf(changedState));
 

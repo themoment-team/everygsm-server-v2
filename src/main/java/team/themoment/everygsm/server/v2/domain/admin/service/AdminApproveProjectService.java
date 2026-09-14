@@ -85,7 +85,9 @@ public class AdminApproveProjectService {
         List<Long> participantIds = resolveParticipantIds(project);
 
         ProjectReqDto reqDto = ProjectReqDto.builder().name(project.getTitle()).description(project.getDescription())
-                .startYear(project.getStartYear()).clubId(clubId).participantIds(participantIds).build();
+                .startYear(project.getStartYear()).clubId(clubId).participantIds(participantIds)
+                .repositories(List.copyOf(project.getRepoUrls())).techStacks(List.copyOf(project.getStackNames()))
+                .build();
 
         DatagsmApiResponse<DatagsmProjectResDto> response = datagsmApiClient.createProject(reqDto);
         if (response == null || response.getData() == null || response.getData().getId() == null) {
@@ -118,7 +120,9 @@ public class AdminApproveProjectService {
 
         UpdateProjectReqDto reqDto = UpdateProjectReqDto.builder().name(project.getTitle())
                 .description(project.getDescription()).startYear(project.getStartYear()).clubId(clubId)
-                .participantIds(participantIds).status(currentState.status()).endYear(currentState.endYear()).build();
+                .participantIds(participantIds).status(currentState.status()).endYear(currentState.endYear())
+                .repositories(List.copyOf(project.getRepoUrls())).techStacks(List.copyOf(project.getStackNames()))
+                .build();
 
         DatagsmApiResponse<DatagsmProjectResDto> response = datagsmApiClient
                 .updateProject(project.getExternalProjectId(), reqDto);
