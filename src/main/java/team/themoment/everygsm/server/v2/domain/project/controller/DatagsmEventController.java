@@ -7,8 +7,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +14,7 @@ import team.themoment.everygsm.server.v2.domain.project.dto.webhook.DatagsmEvent
 import team.themoment.everygsm.server.v2.domain.project.service.HandleDatagsmProjectEventService;
 import team.themoment.everygsm.server.v2.global.exception.error.ExpectedException;
 import team.themoment.everygsm.server.v2.global.security.datagsm.DatagsmSignatureVerifier;
+import tools.jackson.databind.ObjectMapper;
 
 @Tag(name = "DatagsmEvent", description = "DataGSM 이벤트 수신 API")
 @RestController
