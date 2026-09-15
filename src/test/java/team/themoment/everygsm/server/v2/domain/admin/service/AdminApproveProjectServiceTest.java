@@ -2,50 +2,33 @@ package team.themoment.everygsm.server.v2.domain.admin.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatcher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import team.themoment.datagsm.sdk.openapi.DataGsmOpenApiClient;
-import team.themoment.datagsm.sdk.openapi.client.ProjectApi;
-import team.themoment.datagsm.sdk.openapi.model.Project;
-import team.themoment.datagsm.sdk.openapi.model.ProjectResponse;
-import team.themoment.datagsm.sdk.openapi.model.ProjectStatus;
 import team.themoment.everygsm.server.v2.domain.project.entity.ProjectJpaEntity;
-import team.themoment.everygsm.server.v2.domain.project.entity.constant.DatagsmProjectStatus;
 import team.themoment.everygsm.server.v2.domain.project.entity.constant.Status;
 import team.themoment.everygsm.server.v2.domain.project.mapper.ProjectMapper;
 import team.themoment.everygsm.server.v2.domain.project.repository.ProjectRepository;
 import team.themoment.everygsm.server.v2.global.exception.error.ExpectedException;
-import team.themoment.everygsm.server.v2.global.thirdparty.feign.datagsm.DatagsmApiClient;
-import team.themoment.everygsm.server.v2.global.thirdparty.feign.datagsm.dto.DatagsmApiResponse;
-import team.themoment.everygsm.server.v2.global.thirdparty.feign.datagsm.dto.DatagsmProjectResDto;
-import team.themoment.everygsm.server.v2.global.thirdparty.feign.datagsm.dto.ProjectReqDto;
-import team.themoment.everygsm.server.v2.global.thirdparty.feign.datagsm.dto.UpdateProjectReqDto;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("어드민 프로젝트 승인 서비스 테스트")
 class AdminApproveProjectServiceTest {
 
     private static final long PROJECT_ID = 1L;
+    private static final long ORIGINAL_PROJECT_ID = 2L;
     private static final long EXTERNAL_ID = 100L;
     private static final String TITLE = "에브리지즘";
     private static final int START_YEAR = 2026;
@@ -57,13 +40,7 @@ class AdminApproveProjectServiceTest {
     private ProjectMapper projectMapper;
 
     @Mock
-    private DatagsmApiClient datagsmApiClient;
-
-    @Mock
-    private DataGsmOpenApiClient dataGsmOpenApiClient;
-
-    @Mock
-    private ProjectApi projectApi;
+    private DatagsmProjectSyncSupport datagsmProjectSyncSupport;
 
     @InjectMocks
     private AdminApproveProjectService adminApproveProjectService;
@@ -74,24 +51,6 @@ class AdminApproveProjectServiceTest {
     void setUp() {
         project = ProjectJpaEntity.builder().title(TITLE).description("설명").logo("logo.png").prodUrl("https://a.b")
                 .startYear(START_YEAR).status(Status.PENDING).build();
-        given(projectRepository.findProjectWithCollectionsById(PROJECT_ID)).willReturn(Optional.of(project));
-    }
-
-    /** datagsm 프로젝트 검색 결과를 흉내낸다. */
-    private void givenDatagsmSearchReturns(Project... found) {
-        ProjectResponse response = new ProjectResponse();
-        response.setProjects(List.of(found));
-        response.setTotalPages(1);
-        given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-        given(projectApi.getProjects(any(ProjectApi.ProjectRequest.class))).willReturn(response);
-    }
-
-    private Project datagsmProject() {
-        Project external = new Project();
-        external.setId(EXTERNAL_ID);
-        external.setName(TITLE);
-        external.setStartYear(START_YEAR);
-        return external;
     }
 
     @Nested
@@ -99,180 +58,76 @@ class AdminApproveProjectServiceTest {
     class Describe_execute {
 
         @Nested
-        @DisplayName("datagsm 등록 응답을 읽지 못했지만 같은 이름의 프로젝트가 datagsm에 이미 있는 경우")
-        class Context_with_unreadable_response_but_existing_project {
-
-            @Test
-            @DisplayName("externalProjectId를 회수해 유실을 막는다")
-            void it_recovers_external_project_id() {
-                // 최초 조회는 미등록, 생성 응답은 읽지 못하고, 재조회에서 발견되는 상황
-                ProjectResponse empty = new ProjectResponse();
-                empty.setProjects(List.of());
-                empty.setTotalPages(1);
-
-                ProjectResponse found = new ProjectResponse();
-                found.setProjects(List.of(datagsmProject()));
-                found.setTotalPages(1);
-
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProjects(any(ProjectApi.ProjectRequest.class))).willReturn(empty, found);
-                given(datagsmApiClient.createProject(any(ProjectReqDto.class))).willReturn(null);
-                given(projectRepository.findByExternalProjectId(EXTERNAL_ID)).willReturn(Optional.empty());
-
-                adminApproveProjectService.execute(PROJECT_ID);
-
-                assertEquals(EXTERNAL_ID, project.getExternalProjectId());
-                assertEquals(Status.APPROVED, project.getStatus());
-            }
-        }
-
-        @Nested
-        @DisplayName("datagsm에 같은 이름과 startYear의 프로젝트가 이미 있는 경우")
-        class Context_with_existing_datagsm_project {
-
-            @Test
-            @DisplayName("새로 생성하지 않고 기존 id에 매핑한다")
-            void it_maps_without_creating() {
-                givenDatagsmSearchReturns(datagsmProject());
-                given(projectRepository.findByExternalProjectId(EXTERNAL_ID)).willReturn(Optional.empty());
-
-                adminApproveProjectService.execute(PROJECT_ID);
-
-                assertEquals(EXTERNAL_ID, project.getExternalProjectId());
-                verify(datagsmApiClient, never()).createProject(any(ProjectReqDto.class));
-            }
-        }
-
-        @Nested
-        @DisplayName("매핑하려는 externalProjectId를 다른 프로젝트가 이미 점유한 경우")
-        class Context_with_occupied_external_id {
+        @DisplayName("존재하지 않는 프로젝트 ID가 주어진 경우")
+        class Context_with_nonexistent_id {
 
             @Test
             @DisplayName("ExpectedException을 던진다")
             void it_throws_expected_exception() {
-                givenDatagsmSearchReturns(datagsmProject());
-                ProjectJpaEntity occupier = mock(ProjectJpaEntity.class);
-                given(occupier.getId()).willReturn(999L);
-                given(projectRepository.findByExternalProjectId(EXTERNAL_ID)).willReturn(Optional.of(occupier));
+                given(projectRepository.findProjectWithCollectionsById(99L)).willReturn(Optional.empty());
 
-                assertThrows(ExpectedException.class, () -> adminApproveProjectService.execute(PROJECT_ID));
+                assertThrows(ExpectedException.class, () -> adminApproveProjectService.execute(99L));
             }
         }
 
         @Nested
-        @DisplayName("이미 datagsm에 등록되어 externalProjectId를 가진 프로젝트인 경우")
-        class Context_with_already_registered_project {
+        @DisplayName("externalProjectId가 없는 프로젝트인 경우")
+        class Context_without_external_project_id {
 
             @Test
-            @DisplayName("생성 API 대신 수정 API를 호출한다")
-            void it_calls_update_instead_of_create() {
-                project.assignExternalProjectId(EXTERNAL_ID);
-
-                Project currentDatagsmProject = new Project();
-                currentDatagsmProject.setId(EXTERNAL_ID);
-                currentDatagsmProject.setStatus(ProjectStatus.ACTIVE);
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProject(EXTERNAL_ID)).willReturn(currentDatagsmProject);
-
-                DatagsmApiResponse<DatagsmProjectResDto> response = mock(DatagsmApiResponse.class);
-                DatagsmProjectResDto data = mock(DatagsmProjectResDto.class);
-                given(data.getId()).willReturn(EXTERNAL_ID);
-                given(response.getData()).willReturn(data);
-                given(datagsmApiClient.updateProject(eq(EXTERNAL_ID), any(UpdateProjectReqDto.class)))
-                        .willReturn(response);
+            @DisplayName("datagsm 등록을 수행하고 상태를 APPROVED로 바꾼다")
+            void it_registers_and_approves() {
+                given(projectRepository.findProjectWithCollectionsById(PROJECT_ID)).willReturn(Optional.of(project));
 
                 adminApproveProjectService.execute(PROJECT_ID);
 
-                verify(datagsmApiClient).updateProject(eq(EXTERNAL_ID), any(UpdateProjectReqDto.class));
-                verify(datagsmApiClient, never()).createProject(any(ProjectReqDto.class));
+                verify(datagsmProjectSyncSupport).registerToDatagsm(project);
+                verify(datagsmProjectSyncSupport, never()).updateInDatagsm(project);
                 assertEquals(Status.APPROVED, project.getStatus());
             }
+        }
+
+        @Nested
+        @DisplayName("이미 externalProjectId를 가진 프로젝트인 경우")
+        class Context_with_external_project_id {
 
             @Test
-            @DisplayName("수정 응답에 id가 없으면 ExpectedException을 던진다")
-            void it_throws_when_update_response_is_invalid() {
+            @DisplayName("datagsm 수정을 수행하고 상태를 APPROVED로 바꾼다")
+            void it_updates_and_approves() {
                 project.assignExternalProjectId(EXTERNAL_ID);
-
-                Project currentDatagsmProject = new Project();
-                currentDatagsmProject.setId(EXTERNAL_ID);
-                currentDatagsmProject.setStatus(ProjectStatus.ACTIVE);
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProject(EXTERNAL_ID)).willReturn(currentDatagsmProject);
-
-                given(datagsmApiClient.updateProject(eq(EXTERNAL_ID), any(UpdateProjectReqDto.class))).willReturn(null);
-
-                assertThrows(ExpectedException.class, () -> adminApproveProjectService.execute(PROJECT_ID));
-            }
-
-            @Test
-            @DisplayName("datagsm 현재 상태 조회에 실패하면 ExpectedException을 던지고 수정 API를 호출하지 않는다")
-            void it_throws_when_current_state_fetch_fails() {
-                project.assignExternalProjectId(EXTERNAL_ID);
-
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProject(EXTERNAL_ID)).willThrow(new RuntimeException("network error"));
-
-                assertThrows(ExpectedException.class, () -> adminApproveProjectService.execute(PROJECT_ID));
-                verify(datagsmApiClient, never()).updateProject(any(Long.class), any(UpdateProjectReqDto.class));
-            }
-
-            @Test
-            @DisplayName("datagsm에 이미 ENDED 상태로 등록된 경우 그 상태를 유지한 채 수정한다")
-            void it_preserves_existing_status() {
-                project.assignExternalProjectId(EXTERNAL_ID);
-
-                Project currentDatagsmProject = new Project();
-                currentDatagsmProject.setId(EXTERNAL_ID);
-                currentDatagsmProject.setStatus(ProjectStatus.ENDED);
-                currentDatagsmProject.setEndYear(2025);
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProject(EXTERNAL_ID)).willReturn(currentDatagsmProject);
-
-                DatagsmApiResponse<DatagsmProjectResDto> response = mock(DatagsmApiResponse.class);
-                DatagsmProjectResDto data = mock(DatagsmProjectResDto.class);
-                given(data.getId()).willReturn(EXTERNAL_ID);
-                given(response.getData()).willReturn(data);
-                ArgumentMatcher<UpdateProjectReqDto> preservesEndedStatus = reqDto -> reqDto
-                        .getStatus() == ProjectStatus.ENDED && Integer.valueOf(2025).equals(reqDto.getEndYear());
-                given(datagsmApiClient.updateProject(eq(EXTERNAL_ID), argThat(preservesEndedStatus)))
-                        .willReturn(response);
-
-                adminApproveProjectService.execute(PROJECT_ID);
-
-                verify(datagsmApiClient).updateProject(eq(EXTERNAL_ID), argThat(preservesEndedStatus));
-                assertEquals(DatagsmProjectStatus.ENDED, project.getDatagsmStatus());
-                assertEquals(2025, project.getDatagsmEndYear());
-            }
-
-            @Test
-            @DisplayName("EveryGSM의 리포지토리 링크와 기술스택을 수정 요청에 함께 실어 보낸다")
-            void it_sends_repositories_and_tech_stacks() {
-                project = ProjectJpaEntity.builder().title(TITLE).description("설명").logo("logo.png")
-                        .prodUrl("https://a.b").startYear(START_YEAR).status(Status.PENDING)
-                        .repoUrls(Set.of("https://github.com/team/repo")).stackNames(Set.of("Kotlin", "Spring Boot"))
-                        .build();
                 given(projectRepository.findProjectWithCollectionsById(PROJECT_ID)).willReturn(Optional.of(project));
-                project.assignExternalProjectId(EXTERNAL_ID);
-
-                Project currentDatagsmProject = new Project();
-                currentDatagsmProject.setId(EXTERNAL_ID);
-                currentDatagsmProject.setStatus(ProjectStatus.ACTIVE);
-                given(dataGsmOpenApiClient.projects()).willReturn(projectApi);
-                given(projectApi.getProject(EXTERNAL_ID)).willReturn(currentDatagsmProject);
-
-                DatagsmApiResponse<DatagsmProjectResDto> response = mock(DatagsmApiResponse.class);
-                DatagsmProjectResDto data = mock(DatagsmProjectResDto.class);
-                given(data.getId()).willReturn(EXTERNAL_ID);
-                given(response.getData()).willReturn(data);
-                ArgumentMatcher<UpdateProjectReqDto> carriesRepoAndTechStack = reqDto -> Set
-                        .copyOf(reqDto.getRepositories()).equals(Set.of("https://github.com/team/repo"))
-                        && Set.copyOf(reqDto.getTechStacks()).equals(Set.of("Kotlin", "Spring Boot"));
-                given(datagsmApiClient.updateProject(eq(EXTERNAL_ID), argThat(carriesRepoAndTechStack)))
-                        .willReturn(response);
 
                 adminApproveProjectService.execute(PROJECT_ID);
 
-                verify(datagsmApiClient).updateProject(eq(EXTERNAL_ID), argThat(carriesRepoAndTechStack));
+                verify(datagsmProjectSyncSupport).updateInDatagsm(project);
+                verify(datagsmProjectSyncSupport, never()).registerToDatagsm(project);
+                assertEquals(Status.APPROVED, project.getStatus());
+            }
+        }
+
+        @Nested
+        @DisplayName("승인된 프로젝트의 수정 카피본(originalProjectId 보유)인 경우")
+        class Context_with_original_project {
+
+            @Test
+            @DisplayName("원본에 내용을 반영하고 원본을 승인 처리한 뒤 카피본은 비활성화한다")
+            void it_applies_to_original_and_approves_original() {
+                ProjectJpaEntity original = ProjectJpaEntity.builder().title("원본 제목").description("원본 설명")
+                        .logo("logo.png").prodUrl("https://a.b").startYear(START_YEAR).status(Status.APPROVED)
+                        .externalProjectId(EXTERNAL_ID).build();
+                ProjectJpaEntity copy = ProjectJpaEntity.builder().title(TITLE).description("설명").logo("logo.png")
+                        .prodUrl("https://a.b").startYear(START_YEAR).status(Status.PENDING)
+                        .originalProjectId(ORIGINAL_PROJECT_ID).build();
+                given(projectRepository.findProjectWithCollectionsById(PROJECT_ID)).willReturn(Optional.of(copy));
+                given(projectRepository.findProjectWithCollectionsById(ORIGINAL_PROJECT_ID))
+                        .willReturn(Optional.of(original));
+
+                adminApproveProjectService.execute(PROJECT_ID);
+
+                verify(datagsmProjectSyncSupport).updateInDatagsm(original);
+                assertEquals(TITLE, original.getTitle());
+                assertEquals(Status.APPROVED, original.getStatus());
+                assertEquals(Status.INACTIVE, copy.getStatus());
             }
         }
     }
