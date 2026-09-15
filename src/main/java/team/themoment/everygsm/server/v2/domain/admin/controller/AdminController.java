@@ -8,10 +8,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import team.themoment.everygsm.server.v2.domain.admin.dto.request.AdminRejectReqDto;
+import team.themoment.everygsm.server.v2.domain.admin.dto.response.DatagsmSyncResDto;
 import team.themoment.everygsm.server.v2.domain.admin.service.AdminApproveProjectService;
 import team.themoment.everygsm.server.v2.domain.admin.service.AdminQueryPendingProjectService;
 import team.themoment.everygsm.server.v2.domain.admin.service.AdminQueryProjectService;
 import team.themoment.everygsm.server.v2.domain.admin.service.AdminRejectProjectService;
+import team.themoment.everygsm.server.v2.domain.admin.service.AdminSyncRepoAndTechStackToDatagsmService;
 import team.themoment.everygsm.server.v2.domain.project.dto.response.ProjectResDto;
 import team.themoment.everygsm.server.v2.domain.project.dto.response.QueryProjectResDto;
 
@@ -24,6 +26,7 @@ public class AdminController {
     private final AdminQueryPendingProjectService adminQueryPendingProjectService;
     private final AdminApproveProjectService adminApproveProjectService;
     private final AdminRejectProjectService adminRejectProjectService;
+    private final AdminSyncRepoAndTechStackToDatagsmService adminSyncRepoAndTechStackToDatagsmService;
 
     @Operation(summary = "승인 대기 프로젝트 조회", description = "승인 대기 중인 모든 프로젝트를 조회합니다")
     @GetMapping("/requests")
@@ -48,5 +51,11 @@ public class AdminController {
     public ProjectResDto reject(@Parameter(description = "프로젝트 ID") @PathVariable("projectId") Long projectId,
             @RequestBody @Valid AdminRejectReqDto reqDto) {
         return adminRejectProjectService.execute(projectId, reqDto);
+    }
+
+    @Operation(summary = "datagsm 리포지토리·기술스택 일괄 재동기화", description = "이미 datagsm에 등록된 프로젝트의 리포지토리 링크와 기술스택을 일괄로 재동기화합니다")
+    @PostMapping("/datagsm-sync")
+    public DatagsmSyncResDto syncDatagsm() {
+        return adminSyncRepoAndTechStackToDatagsmService.execute();
     }
 }
